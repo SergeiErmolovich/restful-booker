@@ -14,16 +14,19 @@ import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import java.time.LocalDate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
 public class BookingTests {
 
+  private static final Logger logger = LoggerFactory.getLogger(BookingTests.class);
   protected int statusCode;
   protected String bookingById;
-  protected String createTokenJson;
-  protected String createBookingJson;
+  protected String testUserJson;
+  protected String testBookingJson;
   protected String updateBookingJson;
   protected String patchBookingJson;
   protected Booking testBooking;
@@ -35,7 +38,6 @@ public class BookingTests {
   protected Response response;
   protected RequestSpecification authRequestSpec;
   protected RequestSpecification noAuthRequestSpec;
-  protected RequestSpecification deleteRequestSpec;
 
   @BeforeClass
   public void setUp() {
@@ -55,21 +57,26 @@ public class BookingTests {
             .build()).build();
     objectMapper = ObjectMapperSingleton.getInstance();
     try {
-      createTokenJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(testUser);
-      createBookingJson = objectMapper.writerWithDefaultPrettyPrinter()
+      testUserJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(testUser);
+      logger.info("обьект testUser успешно сериализован, результат:\n{}", testUserJson);
+      testBookingJson = objectMapper.writerWithDefaultPrettyPrinter()
           .writeValueAsString(testBooking);
+      logger.info("обьект testBooking успешно сериализован, результат:\n{}", testBookingJson);
       updateBookingJson = objectMapper.writerWithDefaultPrettyPrinter()
           .writeValueAsString(updateBooking);
+      logger.info("обьект updateBooking успешно сериализован, результат:\n{}", updateBookingJson);
       patchBookingJson = objectMapper.writerWithDefaultPrettyPrinter()
           .writeValueAsString(patchBooking);
+      logger.info("обьект patchBooking успешно сериализован, результат:\n{}", patchBookingJson);
     } catch (JsonProcessingException e) {
-      throw new RuntimeException(e);
+      logger.error("Ошибка при сериализации объекта: {}", e.getMessage(), e);
+      throw new RuntimeException("Ошибка при сериализации объекта", e);
     }
   }
 
   @Test(priority = 1)
   public void testCreateToken() {
-    response = RestAssured.given().log().all().spec(noAuthRequestSpec).body(createTokenJson)
+    response = RestAssured.given().log().all().spec(noAuthRequestSpec).body(testUserJson)
         .when().post(AUTH_EP);
     response.then().log().all();
     statusCode = response.getStatusCode();
@@ -83,7 +90,7 @@ public class BookingTests {
 
   @Test(priority = 2)
   public void testCreateBooking() {
-    response = RestAssured.given().log().all().spec(noAuthRequestSpec).body(createBookingJson)
+    response = RestAssured.given().log().all().spec(noAuthRequestSpec).body(testBookingJson)
         .when()
         .post(BOOKING_EP);
     response.then().log().all();
@@ -94,7 +101,7 @@ public class BookingTests {
   }
 
   @Test(priority = 3)
-  public void tesUpdateBooking() {
+  public void testUpdateBooking() {
     response = RestAssured.given().log().all().spec(authRequestSpec).body(updateBookingJson).when()
         .put(bookingById);
     response.then().log().all();
@@ -110,10 +117,21 @@ public class BookingTests {
   }
 
   @Test(priority = 4)
+  public void testUpdateBookingNoToken() {
+    response = RestAssured.given().log().all().spec(noAuthRequestSpec).body(testBookingJson)
+        .when().put(bookingById);
+    response.then().log().all();
+    statusCode = response.getStatusCode();
+    Assert.assertEquals(statusCode, 403);
+    Assert.assertEquals(response.asString(), FORBIDDEN_RESPONSE);
+  }
+
+  @Test(priority = 5)
   public void testPatchBooking() {
     response = RestAssured.given().log().all().spec(authRequestSpec).body(patchBookingJson).when()
         .patch(bookingById);
     response.then().log().all();
+    statusCode = response.getStatusCode();
     Assert.assertEquals(statusCode, 200);
     try {
       responseBooking = objectMapper.readValue(response.body().asPrettyString(), Booking.class);
@@ -126,7 +144,7 @@ public class BookingTests {
     Assert.assertEquals(responseBooking, testBooking);
   }
 
-  @Test(priority = 5)
+  @Test(priority = 6)
   public void testGetBooking() {
     response = RestAssured.given().log().all().spec(noAuthRequestSpec).when()
         .get(bookingById);
@@ -141,7 +159,7 @@ public class BookingTests {
     Assert.assertEquals(responseBooking, testBooking);
   }
 
-  @Test(priority = 6)
+  @Test(priority = 7)
   public void testDeleteBooking() {
     response = RestAssured.given().log().all().spec(authRequestSpec).when()
         .delete(bookingById);
